@@ -157,48 +157,81 @@ export default function DispatchPage() {
     setExtr(true); setLog(['Uploading to Gemini AI...'])
     try {
       const res = await loadsApi.extract(file)
-      const { form_data, status_log } = res.data
+      const { form_data, status_log, extracted } = res.data
       setLog(status_log || ['Done'])
-      const rawStops: Stop[] = (form_data.Stops || []).map((s: any, i: number) => ({
+
+      // DEBUG — open browser console (F12) to see what backend returned
+      console.log('=== EXTRACTION DEBUG ===')
+      console.log('form_data (PascalCase mapped):', form_data)
+      console.log('extracted (raw snake_case):', extracted)
+      console.log('========================')
+
+      // Flexible key lookup — handles PascalCase, snake_case, and lowercase from backend
+      const g = (...keys: string[]) => {
+        for (const k of keys) {
+          const v = form_data[k]
+          if (v !== undefined && v !== null && v !== '') return String(v)
+        }
+        return ''
+      }
+
+      const rawStops: Stop[] = (form_data.Stops || form_data.stops || []).map((s: any, i: number) => ({
         stop_number: s.stop_number || i + 1,
         action: s.action === 'Delivery' ? 'Delivery' : 'Pickup',
-        company_name: s.company_name || '', street: s.street || '',
-        city: s.city || '', state: s.state || '',
-        zip: s.zip || '', date: s.date || '',
-        time: s.time || '', notes: s.notes || '',
+        company_name: s.company_name || s.Company_Name || '',
+        street: s.street || s.Street || '',
+        city: s.city || s.City || '',
+        state: s.state || s.State || '',
+        zip: s.zip || s.ZIP || s.Zip || '',
+        date: s.date || s.Date || '',
+        time: s.time || s.Time || s.appt || '',
+        notes: s.notes || s.Notes || '',
       }))
+
       const stops: Stop[] = rawStops.length > 0 ? rawStops : [
         {
           stop_number: 1, action: 'Pickup',
-          company_name: form_data.Origin_Company || form_data.Shipper_Name || '',
-          street: form_data.Origin_Street || '', city: form_data.Origin_City || '',
-          state: form_data.Origin_State || '', zip: form_data.Origin_ZIP || '',
-          date: form_data.Load_Date || '', time: '', notes: '',
+          company_name: g('Origin_Company', 'origin_company', 'Shipper_Name', 'shipper_name'),
+          street: g('Origin_Street', 'origin_street', 'pickup_street'),
+          city:   g('Origin_City',   'origin_city',   'pickup_city'),
+          state:  g('Origin_State',  'origin_state',  'pickup_state'),
+          zip:    g('Origin_ZIP',    'origin_zip',    'pickup_zip'),
+          date:   g('Load_Date',     'load_date',     'pickup_date'),
+          time: '', notes: '',
         },
         {
           stop_number: 2, action: 'Delivery',
-          company_name: form_data.Destination_Company || '',
-          street: form_data.Destination_Street || '', city: form_data.Destination_City || '',
-          state: form_data.Destination_State || '', zip: form_data.Destination_ZIP || '',
-          date: form_data.Delivery_Date || '', time: '', notes: '',
+          company_name: g('Destination_Company', 'destination_company', 'consignee_name'),
+          street: g('Destination_Street', 'destination_street', 'delivery_street'),
+          city:   g('Destination_City',   'destination_city',   'delivery_city'),
+          state:  g('Destination_State',  'destination_state',  'delivery_state'),
+          zip:    g('Destination_ZIP',    'destination_zip',    'delivery_zip'),
+          date:   g('Delivery_Date',      'delivery_date'),
+          time: '', notes: '',
         },
       ]
+
       setForm((prev: any) => ({
         ...prev,
-        broker_load_id: form_data.Broker_Load_ID || prev.broker_load_id,
-        broker_name:    form_data.Broker_Name    || prev.broker_name,
-        shipper_name:   form_data.Shipper_Name   || prev.shipper_name,
-        carrier_name:   form_data.Carrier_Name   || prev.carrier_name,
-        driver_name:    form_data.Driver_Name    || prev.driver_name,
-        truck_number:   form_data.Truck_Number   || prev.truck_number,
-        trailer_number: form_data.Trailer_Number || prev.trailer_number,
-        commodity:      form_data.Commodity      || prev.commodity,
-        weight_lbs:     form_data.Weight_LBS     || prev.weight_lbs,
-        loaded_miles:   form_data.Miles          || prev.loaded_miles,
-        freight_rate:   form_data.Rate_USD       || prev.freight_rate,
+        broker_load_id: g('Broker_Load_ID', 'broker_load_id', 'BrokerLoadID', 'load_id') || prev.broker_load_id,
+        broker_name:    g('Broker_Name',    'broker_name',    'BrokerName')               || prev.broker_name,
+        shipper_name:   g('Shipper_Name',   'shipper_name',   'ShipperName')              || prev.shipper_name,
+        carrier_name:   g('Carrier_Name',   'carrier_name',   'CarrierName')              || prev.carrier_name,
+        driver_name:    g('Driver_Name',    'driver_name',    'DriverName')               || prev.driver_name,
+        truck_number:   g('Truck_Number',   'truck_number',   'TruckNumber')              || prev.truck_number,
+        trailer_number: g('Trailer_Number', 'trailer_number', 'TrailerNumber')            || prev.trailer_number,
+        commodity:      g('Commodity',      'commodity')                                   || prev.commodity,
+        weight_lbs:     g('Weight_LBS',     'weight_lbs',     'weight',  'Weight')        || prev.weight_lbs,
+        loaded_miles:   g('Miles',          'miles',          'loaded_miles', 'Loaded_Miles') || prev.loaded_miles,
+        freight_rate:   g('Rate_USD',       'rate_usd',       'freight_rate', 'rate', 'Rate') || prev.freight_rate,
         source_file: file.name, stops,
       }))
-      toast.success(`${stops.length} stop(s) extracted`)
+      const realFields = Object.keys(form_data || {}).length
+      if (realFields > 0) {
+        toast.success(`✅ Extracted ${realFields} fields, ${stops.length} stop(s)`)
+      } else {
+        toast.error('⚠️ Extraction returned no data — check browser console (F12)')
+      }
     } catch {
       toast.error('Extraction failed — fill manually')
       setLog(['Failed'])
