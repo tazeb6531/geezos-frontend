@@ -175,11 +175,11 @@ export default function AccountingPage() {
   }
 
   // ── Email ────────────────────────────────────────────────────────────────────
-  const sendEmail = async () => {
+const sendEmail = async () => {
     if (!locked || !emailAddr) { toast.error('Enter email address'); return }
     setSending(true)
     try {
-      await payrollApi.sendEmail(locked.id, emailAddr)
+      await payrollApi.email({ payroll_id: locked.id, email: emailAddr })
       toast.success(`✅ Settlement email sent to ${emailAddr}`)
       setLocked(null)
     } catch (e: any) {
@@ -856,7 +856,7 @@ export default function AccountingPage() {
             <select className={ic} style={is} value={histFilter}
               onChange={e => setHistFilter(e.target.value)}>
               <option>All</option>
-              {[...new Set(payrolls.map(p => p.driver_name))].map(n => (
+              {Array.from(new Set(payrolls.map(p => p.driver_name))).map(n => (
                 <option key={n as string}>{n as string}</option>
               ))}
             </select>
