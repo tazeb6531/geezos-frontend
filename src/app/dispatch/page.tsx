@@ -165,18 +165,17 @@ export default function DispatchPage() {
       console.log('form_data (PascalCase mapped):', form_data)
       console.log('extracted (raw snake_case):', extracted)
       console.log('========================')
-      // Flexible key lookup — handles both PascalCase (form_data) and snake_case (extracted)
-      const fd = form_data || {}
-      const ex = extracted || {}
+
+      // Flexible key lookup — handles PascalCase, snake_case, and lowercase from backend
       const g = (...keys: string[]) => {
         for (const k of keys) {
-          const v = fd[k] ?? ex[k]
+          const v = form_data[k]
           if (v !== undefined && v !== null && v !== '') return String(v)
         }
         return ''
       }
 
-      const rawStops: Stop[] = (fd.Stops || ex.stops || []).map((s: any, i: number) => ({
+      const rawStops: Stop[] = (form_data.Stops || form_data.stops || []).map((s: any, i: number) => ({
         stop_number: s.stop_number || i + 1,
         action: s.action === 'Delivery' ? 'Delivery' : 'Pickup',
         company_name: s.company_name || s.Company_Name || '',
@@ -214,25 +213,24 @@ export default function DispatchPage() {
 
       setForm((prev: any) => ({
         ...prev,
-        broker_load_id: g('Broker_Load_ID', 'broker_load_id') || prev.broker_load_id,
-        broker_name:    g('Broker_Name',    'broker_name')    || prev.broker_name,
-        shipper_name:   g('Shipper_Name',   'shipper_name')   || prev.shipper_name,
-        carrier_name:   g('Carrier_Name',   'carrier_name')   || prev.carrier_name,
-        driver_name:    g('Driver_Name',    'driver_name')    || prev.driver_name,
-        truck_number:   g('Truck_Number',   'truck_number')   || prev.truck_number,
-        trailer_number: g('Trailer_Number', 'trailer_number') || prev.trailer_number,
-        commodity:      g('Commodity',      'commodity')      || prev.commodity,
-        weight_lbs:     g('Weight_LBS',     'weight_lbs',  'weight') || prev.weight_lbs,
-        loaded_miles:   g('Miles',          'miles', 'loaded_miles') || prev.loaded_miles,
-        freight_rate:   g('Rate_USD',       'rate_usd', 'freight_rate', 'rate') || prev.freight_rate,
+        broker_load_id: g('Broker_Load_ID', 'broker_load_id', 'BrokerLoadID', 'load_id') || prev.broker_load_id,
+        broker_name:    g('Broker_Name',    'broker_name',    'BrokerName')               || prev.broker_name,
+        shipper_name:   g('Shipper_Name',   'shipper_name',   'ShipperName')              || prev.shipper_name,
+        carrier_name:   g('Carrier_Name',   'carrier_name',   'CarrierName')              || prev.carrier_name,
+        driver_name:    g('Driver_Name',    'driver_name',    'DriverName')               || prev.driver_name,
+        truck_number:   g('Truck_Number',   'truck_number',   'TruckNumber')              || prev.truck_number,
+        trailer_number: g('Trailer_Number', 'trailer_number', 'TrailerNumber')            || prev.trailer_number,
+        commodity:      g('Commodity',      'commodity')                                   || prev.commodity,
+        weight_lbs:     g('Weight_LBS',     'weight_lbs',     'weight',  'Weight')        || prev.weight_lbs,
+        loaded_miles:   g('Miles',          'miles',          'loaded_miles', 'Loaded_Miles') || prev.loaded_miles,
+        freight_rate:   g('Rate_USD',       'rate_usd',       'freight_rate', 'rate', 'Rate') || prev.freight_rate,
         source_file: file.name, stops,
       }))
-
-      const realFields = Object.keys(fd).length
+      const realFields = Object.keys(form_data || {}).length
       if (realFields > 0) {
         toast.success(`✅ Extracted ${realFields} fields, ${stops.length} stop(s)`)
       } else {
-        toast.error('⚠️ AI returned no data — check F12 console')
+        toast.error('⚠️ Extraction returned no data — check browser console (F12)')
       }
     } catch {
       toast.error('Extraction failed — fill manually')
