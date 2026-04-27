@@ -41,7 +41,7 @@ export default function FleetPage() {
       } else {
         await driversApi.create(payload)
       }
-      toast.success(editDriverId ? 'Driver updated' : 'Driver added')
+      toast.success(editDriverId ? 'Driver updated ✅' : 'Driver added ✅')
       setShowDriverForm(false); setEditDriverId(null); setDriverForm({ ...EMPTY_DRIVER }); load()
     } catch (e: any) {
       console.error('Driver save error:', e.response?.data || e.message)
@@ -58,7 +58,7 @@ export default function FleetPage() {
       } else {
         await trucksApi.create(truckForm)
       }
-      toast.success(editTruckId ? 'Truck updated' : 'Truck added')
+      toast.success(editTruckId ? 'Truck updated ✅' : 'Truck added ✅')
       setShowTruckForm(false); setEditTruckId(null); setTruckForm({ ...EMPTY_TRUCK }); load()
     } catch (e: any) {
       console.error('Truck save error:', e.response?.data || e.message)
