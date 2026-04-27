@@ -32,20 +32,38 @@ export default function FleetPage() {
   useEffect(() => { load() }, [showAll])
 
   const saveDriver = async () => {
+    if (!driverForm.name?.trim()) { toast.error('Driver name is required'); return }
     try {
-      const payload = { ...driverForm, pay_rate: Number(driverForm.pay_rate) }
-      editDriverId ? await driversApi.update(editDriverId, payload) : await driversApi.create(payload)
+      const payload = { ...driverForm, pay_rate: Number(driverForm.pay_rate) || 0.28 }
+      console.log('Saving driver:', payload)
+      if (editDriverId) {
+        await driversApi.update(editDriverId, payload)
+      } else {
+        await driversApi.create(payload)
+      }
       toast.success(editDriverId ? 'Driver updated' : 'Driver added')
       setShowDriverForm(false); setEditDriverId(null); setDriverForm({ ...EMPTY_DRIVER }); load()
-    } catch (e: any) { toast.error(e.response?.data?.detail || 'Failed') }
+    } catch (e: any) {
+      console.error('Driver save error:', e.response?.data || e.message)
+      toast.error(e.response?.data?.detail || e.message || 'Failed to save driver')
+    }
   }
 
   const saveTruck = async () => {
+    if (!truckForm.unit_number?.trim()) { toast.error('Unit number is required'); return }
     try {
-      editTruckId ? await trucksApi.update(editTruckId, truckForm) : await trucksApi.create(truckForm)
+      console.log('Saving truck:', truckForm)
+      if (editTruckId) {
+        await trucksApi.update(editTruckId, truckForm)
+      } else {
+        await trucksApi.create(truckForm)
+      }
       toast.success(editTruckId ? 'Truck updated' : 'Truck added')
       setShowTruckForm(false); setEditTruckId(null); setTruckForm({ ...EMPTY_TRUCK }); load()
-    } catch (e: any) { toast.error(e.response?.data?.detail || 'Failed') }
+    } catch (e: any) {
+      console.error('Truck save error:', e.response?.data || e.message)
+      toast.error(e.response?.data?.detail || e.message || 'Failed to save truck')
+    }
   }
 
   const deactivateDriver = async (id: number) => {
