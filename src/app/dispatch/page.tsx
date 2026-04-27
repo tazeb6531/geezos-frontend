@@ -157,83 +157,62 @@ export default function DispatchPage() {
     setExtr(true); setLog(['Uploading to Gemini AI...'])
     try {
       const res = await loadsApi.extract(file)
-      const { form_data, status_log, extracted } = res.data
+      const { form_data, extracted, status_log } = res.data
       setLog(status_log || ['Done'])
 
-      // DEBUG — open browser console (F12) to see what backend returned
-      console.log('=== EXTRACTION DEBUG ===')
-      console.log('form_data (PascalCase mapped):', form_data)
-      console.log('extracted (raw snake_case):', extracted)
-      console.log('========================')
-      // Flexible key lookup — handles both PascalCase (form_data) and snake_case (extracted)
-      const fd = form_data || {}
-      const ex = extracted || {}
-      const g = (...keys: string[]) => {
-        for (const k of keys) {
-          const v = fd[k] ?? ex[k]
-          if (v !== undefined && v !== null && v !== '') return String(v)
-        }
-        return ''
-      }
+      // DEBUG: Open F12 → Console to see what AI returned
+      console.log('RAW extracted (snake_case):', extracted)
+      console.log('MAPPED form_data (PascalCase):', form_data)
 
-      const rawStops: Stop[] = (fd.Stops || ex.stops || []).map((s: any, i: number) => ({
+      const rawStops: Stop[] = (form_data.Stops || []).map((s: any, i: number) => ({
         stop_number: s.stop_number || i + 1,
         action: s.action === 'Delivery' ? 'Delivery' : 'Pickup',
-        company_name: s.company_name || s.Company_Name || '',
-        street: s.street || s.Street || '',
-        city: s.city || s.City || '',
-        state: s.state || s.State || '',
-        zip: s.zip || s.ZIP || s.Zip || '',
-        date: s.date || s.Date || '',
-        time: s.time || s.Time || s.appt || '',
-        notes: s.notes || s.Notes || '',
+        company_name: s.company_name || '', street: s.street || '',
+        city: s.city || '', state: s.state || '',
+        zip: s.zip || '', date: s.date || '',
+        time: s.time || '', notes: s.notes || '',
       }))
-
       const stops: Stop[] = rawStops.length > 0 ? rawStops : [
         {
           stop_number: 1, action: 'Pickup',
-          company_name: g('Origin_Company', 'origin_company', 'Shipper_Name', 'shipper_name'),
-          street: g('Origin_Street', 'origin_street', 'pickup_street'),
-          city:   g('Origin_City',   'origin_city',   'pickup_city'),
-          state:  g('Origin_State',  'origin_state',  'pickup_state'),
-          zip:    g('Origin_ZIP',    'origin_zip',    'pickup_zip'),
-          date:   g('Load_Date',     'load_date',     'pickup_date'),
-          time: '', notes: '',
+          company_name: form_data.Origin_Company || form_data.Shipper_Name || '',
+          street: form_data.Origin_Street || '', city: form_data.Origin_City || '',
+          state: form_data.Origin_State || '', zip: form_data.Origin_ZIP || '',
+          date: form_data.Load_Date || '', time: '', notes: '',
         },
         {
           stop_number: 2, action: 'Delivery',
-          company_name: g('Destination_Company', 'destination_company', 'consignee_name'),
-          street: g('Destination_Street', 'destination_street', 'delivery_street'),
-          city:   g('Destination_City',   'destination_city',   'delivery_city'),
-          state:  g('Destination_State',  'destination_state',  'delivery_state'),
-          zip:    g('Destination_ZIP',    'destination_zip',    'delivery_zip'),
-          date:   g('Delivery_Date',      'delivery_date'),
-          time: '', notes: '',
+          company_name: form_data.Destination_Company || '',
+          street: form_data.Destination_Street || '', city: form_data.Destination_City || '',
+          state: form_data.Destination_State || '', zip: form_data.Destination_ZIP || '',
+          date: form_data.Delivery_Date || '', time: '', notes: '',
         },
       ]
+      const fd = form_data  || {}
+      const ex = extracted  || {}
+      const pick = (fk: string, ek: string) => fd[fk] ?? ex[ek] ?? ''
 
       setForm((prev: any) => ({
         ...prev,
-        broker_load_id: g('Broker_Load_ID', 'broker_load_id') || prev.broker_load_id,
-        broker_name:    g('Broker_Name',    'broker_name')    || prev.broker_name,
-        shipper_name:   g('Shipper_Name',   'shipper_name')   || prev.shipper_name,
-        carrier_name:   g('Carrier_Name',   'carrier_name')   || prev.carrier_name,
-        driver_name:    g('Driver_Name',    'driver_name')    || prev.driver_name,
-        truck_number:   g('Truck_Number',   'truck_number')   || prev.truck_number,
-        trailer_number: g('Trailer_Number', 'trailer_number') || prev.trailer_number,
-        commodity:      g('Commodity',      'commodity')      || prev.commodity,
-        weight_lbs:     g('Weight_LBS',     'weight_lbs',  'weight') || prev.weight_lbs,
-        loaded_miles:   g('Miles',          'miles', 'loaded_miles') || prev.loaded_miles,
-        freight_rate:   g('Rate_USD',       'rate_usd', 'freight_rate', 'rate') || prev.freight_rate,
+        broker_load_id: pick('Broker_Load_ID','broker_load_id') || prev.broker_load_id,
+        broker_name:    pick('Broker_Name',   'broker_name')    || prev.broker_name,
+        shipper_name:   pick('Shipper_Name',  'shipper_name')   || prev.shipper_name,
+        carrier_name:   pick('Carrier_Name',  'carrier_name')   || prev.carrier_name,
+        driver_name:    pick('Driver_Name',   'driver_name')    || prev.driver_name,
+        truck_number:   pick('Truck_Number',  'truck_number')   || prev.truck_number,
+        trailer_number: pick('Trailer_Number','trailer_number') || prev.trailer_number,
+        commodity:      pick('Commodity',     'commodity')      || prev.commodity,
+        weight_lbs:     pick('Weight_LBS',    'weight_lbs')     || prev.weight_lbs,
+        loaded_miles:   pick('Miles',         'miles')          || prev.loaded_miles,
+        freight_rate:   pick('Rate_USD',      'rate_usd')       || prev.freight_rate,
         source_file: file.name, stops,
       }))
 
-      const realFields = Object.keys(fd).length
-      if (realFields > 0) {
-        toast.success(`✅ Extracted ${realFields} fields, ${stops.length} stop(s)`)
-      } else {
-        toast.error('⚠️ AI returned no data — check F12 console')
-      }
+      const filledFields = Object.keys(fd).length
+      toast.success(filledFields > 0
+        ? `✅ ${filledFields} fields extracted, ${stops.length} stop(s)`
+        : '⚠️ AI returned no data — check browser console (F12)'
+      )
     } catch {
       toast.error('Extraction failed — fill manually')
       setLog(['Failed'])
