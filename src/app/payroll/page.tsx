@@ -4,8 +4,8 @@ import { payrollApi, driversApi, loadsApi, accountingApi } from '@/lib/api'
 import toast from 'react-hot-toast'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt = (n: number) =>
-  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmt = (n: number | undefined | null) =>
+  (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const fmtDate = (d: string | null | undefined): string => {
   if (!d) return '—'
@@ -175,7 +175,7 @@ export default function AccountingPage() {
   }
 
   // ── Email ────────────────────────────────────────────────────────────────────
-const sendEmail = async () => {
+  const sendEmail = async () => {
     if (!locked || !emailAddr) { toast.error('Enter email address'); return }
     setSending(true)
     try {

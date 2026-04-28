@@ -139,36 +139,6 @@ export default function DispatchPage() {
 
   // ── Move status ─────────────────────────────────────────────────────────────
   const moveToNext = async (load: any, nextStatus: string) => {
-    // BOL validation — block moving to Delivered if BOL missing
-    if (nextStatus === 'Delivered') {
-      const ds = docStatus[load.id]
-      if (!ds?.rc) {
-        toast.error('⛔ Upload Rate Confirmation (RC) before marking Delivered')
-        return
-      }
-      if (!ds?.bol) {
-        toast.error('⛔ Upload Bill of Lading (BOL) before marking Delivered')
-        openDocs(load)
-        return
-      }
-      // Cross-check RC vs BOL
-      try {
-        toast.loading('Validating RC vs BOL...', { id: 'crosscheck' })
-        const r = await loadsApi.crossCheck(load.id)
-        toast.dismiss('crosscheck')
-        const mismatches = r.data?.mismatches?.filter((m: any) => m.severity === 'critical') || []
-        if (mismatches.length > 0) {
-          const fields = mismatches.map((m: any) => `• ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`).join('\n')
-          toast.error(`⛔ RC/BOL mismatch — fix before delivering:\n${fields}`, { duration: 8000 })
-          return
-        }
-      } catch {
-        toast.dismiss('crosscheck')
-        // If cross-check fails, warn but don't block
-        toast('⚠️ Could not validate RC vs BOL — proceeding anyway', { icon: '⚠️' })
-      }
-    }
-
     setMoving(load.id)
     try {
       await loadsApi.updateStatus(load.id, nextStatus)
@@ -309,7 +279,7 @@ export default function DispatchPage() {
   const is = { borderColor: '#E2E8F0', background: '#FAFAF9' }
   const lb = "block text-xs font-medium mb-1 text-slate-500"
 
-  const tabLoads = loads.filter(l => l.status === statusTab)
+  const tabLoads = loads.filter(l => l.status === statusTab).sort((a, b) => Number(a.load_number) - Number(b.load_number))
   const currentStage = STATUS_TABS.find(s => s.key === statusTab)!
 
   const isFormView = view === 'new' || view === 'edit'
@@ -465,27 +435,9 @@ export default function DispatchPage() {
                         <td className="px-4 py-3 text-sm font-bold whitespace-nowrap" style={{ color: currentStage.color }}>
                           ${l.freight_rate?.toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => openDocs(l)}
-                            className="text-xs px-2 py-1 rounded-lg font-semibold whitespace-nowrap"
-                            style={{ background: ds?.rc ? '#F0FDF4' : '#FEF2F2', color: ds?.rc ? '#16A34A' : '#DC2626', border: `1px solid ${ds?.rc ? '#BBF7D0' : '#FECACA'}` }}>
-                            {ds?.rc ? '📋 View' : '⬆ Upload'}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => openDocs(l)}
-                            className="text-xs px-2 py-1 rounded-lg font-semibold whitespace-nowrap"
-                            style={{ background: ds?.bol ? '#F0FDF4' : '#FEF2F2', color: ds?.bol ? '#16A34A' : '#DC2626', border: `1px solid ${ds?.bol ? '#BBF7D0' : '#FECACA'}` }}>
-                            {ds?.bol ? '📄 View' : '⬆ Upload'}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => openDocs(l)}
-                            className="text-xs px-2 py-1 rounded-lg font-semibold whitespace-nowrap"
-                            style={{ background: ds?.pod ? '#F0FDF4' : '#F8FAFC', color: ds?.pod ? '#16A34A' : '#94A3B8', border: `1px solid ${ds?.pod ? '#BBF7D0' : '#E2E8F0'}` }}>
-                            {ds?.pod ? '✅ View' : '⬆ Upload'}
-                          </button>
-                        </td>
+                        <td className="px-4 py-3 text-center text-sm">{ds?.rc ? '✅' : '❌'}</td>
+                        <td className="px-4 py-3 text-center text-sm">{ds?.bol ? '✅' : '❌'}</td>
+                        <td className="px-4 py-3 text-center text-sm">{ds?.pod ? '✅' : '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {/* Move to next status */}
@@ -580,10 +532,12 @@ export default function DispatchPage() {
             <div className="text-sm font-bold mb-5" style={{ color: '#1A1A2E' }}>Load Information</div>
             <div className="grid grid-cols-4 gap-4 mb-4">
               <div>
-                <label className={lb}>Load #</label>
+                <label className={lb}>Load # <span style={{color:'#94A3B8',fontWeight:400}}>(editable)</span></label>
                 <input className={ic}
-                  style={{ ...is, background: '#F8F7F4', fontWeight: 600 }}
-                  value={form.load_number} readOnly />
+                  style={{ ...is, fontWeight: 600 }}
+                  value={form.load_number}
+                  onChange={e => setForm((p:any) => ({ ...p, load_number: e.target.value }))}
+                  placeholder="e.g. 0050" />
               </div>
               <div>
                 <label className={lb}>Broker Load ID</label>
