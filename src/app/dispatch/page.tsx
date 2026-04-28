@@ -939,19 +939,26 @@ export default function DispatchPage() {
                     const r = await loadsApi.crossCheck(selLoad.id)
                     toast.dismiss(toastId)
                     const result = r.data
-                    const critical = result.mismatches?.filter((m: any) => m.severity === 'critical') || []
-                    const warnings = result.mismatches?.filter((m: any) => m.severity === 'warning') || []
-                    if (critical.length === 0 && warnings.length === 0) {
-                      toast.success('✅ RC and BOL match — no issues found!', { duration: 5000 })
+                    const comparisons = result.comparisons || []
+                    const mismatches  = result.mismatches  || []
+                    const critical    = mismatches.filter((m: any) => m.severity === 'critical')
+                    const warnings    = mismatches.filter((m: any) => m.severity === 'warning')
+
+                    if (comparisons.length === 0) {
+                      toast.error('⚠️ Could not extract fields from documents — check file quality')
+                    } else if (mismatches.length === 0) {
+                      toast.success(`✅ RC and BOL match perfectly — ${comparisons.length} fields verified!`, { duration: 6000 })
                     } else {
                       if (critical.length > 0) {
+                        toast.error(`🚨 ${critical.length} critical mismatch(es) found — review required!`, { duration: 8000 })
                         critical.forEach((m: any) => {
-                          toast.error(`⛔ ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`, { duration: 8000 })
+                          toast.error(`⛔ ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`, { duration: 10000 })
                         })
                       }
                       if (warnings.length > 0) {
+                        toast(`⚠️ ${warnings.length} minor difference(s) found`, { duration: 6000 })
                         warnings.forEach((m: any) => {
-                          toast(`⚠️ ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`, { duration: 6000 })
+                          toast(`⚠️ ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`, { duration: 8000 })
                         })
                       }
                     }
