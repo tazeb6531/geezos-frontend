@@ -7,13 +7,19 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<'company'|'email'|'system'>('company')
   const [company, setCompany] = useState<any>({})
   const [smtp, setSmtp] = useState<any>({})
+  const [loadStart, setLoadStart] = useState('1')
   const [stats, setStats] = useState<any>({})
   const [testEmail, setTestEmail] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     Promise.all([settingsApi.getCompany(), settingsApi.getAll(), settingsApi.stats()])
-      .then(([c, s, st]) => { setCompany(c.data); setSmtp(s.data); setStats(st.data) })
+      .then(([c, s, st]) => {
+        setCompany(c.data)
+        setSmtp(s.data)
+        setStats(st.data)
+        if (s.data?.load_number_start) setLoadStart(s.data.load_number_start)
+      })
   }, [])
 
   const saveCompany = async () => {
@@ -22,6 +28,15 @@ export default function SettingsPage() {
       await settingsApi.saveCompany(company)
       toast.success('Company profile saved')
     } catch { toast.error('Failed to save') } finally { setLoading(false) }
+  }
+
+  const saveLoadStart = async () => {
+    try {
+      const n = parseInt(loadStart)
+      if (isNaN(n) || n < 1) { toast.error('Enter a valid number (minimum 1)'); return }
+      await settingsApi.set('load_number_start', String(n))
+      toast.success(`Load numbers will start from ${String(n).padStart(4,'0')} ✅`)
+    } catch { toast.error('Failed to save') }
   }
 
   const saveSmtp = async () => {
@@ -106,6 +121,32 @@ export default function SettingsPage() {
             style={{ background: '#F0A500' }}>
             {loading ? 'Saving...' : 'Save Company Profile'}
           </button>
+        </div>
+      )}
+
+      {tab === 'company' && (
+        <div className="bg-white rounded-2xl p-6 mt-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+          <h2 className="font-bold mb-5" style={{ color: '#1A1A2E' }}>🔢 Load Number Settings</h2>
+          <label className="block text-xs font-medium mb-1" style={{ color: '#64748B' }}>Starting Load Number</label>
+          <div className="flex gap-3 items-center mb-3">
+            <input type="number" min="1"
+              className="px-3 py-2 rounded-lg text-sm border outline-none w-32"
+              style={{ borderColor: '#E2E8F0', background: '#FAFAF9' }}
+              value={loadStart}
+              onChange={e => setLoadStart(e.target.value)} />
+            <span className="text-sm" style={{ color: '#94A3B8' }}>
+              → Next load: <strong style={{ color: '#1A1A2E' }}>#{String(parseInt(loadStart) || 1).padStart(4,'0')}</strong>
+            </span>
+            <button onClick={saveLoadStart}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+              style={{ background: '#F0A500' }}>
+              Save
+            </button>
+          </div>
+          <div className="text-xs" style={{ color: '#94A3B8' }}>
+            Set this before your first load. System auto-increments from this number.
+            If loads already exist, the next number will be whichever is higher.
+          </div>
         </div>
       )}
 
