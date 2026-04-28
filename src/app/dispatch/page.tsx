@@ -139,6 +139,36 @@ export default function DispatchPage() {
 
   // ── Move status ─────────────────────────────────────────────────────────────
   const moveToNext = async (load: any, nextStatus: string) => {
+    // BOL validation — block moving to Delivered if BOL missing
+    if (nextStatus === 'Delivered') {
+      const ds = docStatus[load.id]
+      if (!ds?.rc) {
+        toast.error('⛔ Upload Rate Confirmation (RC) before marking Delivered')
+        return
+      }
+      if (!ds?.bol) {
+        toast.error('⛔ Upload Bill of Lading (BOL) before marking Delivered')
+        openDocs(load)
+        return
+      }
+      // Cross-check RC vs BOL
+      try {
+        toast.loading('Validating RC vs BOL...', { id: 'crosscheck' })
+        const r = await loadsApi.crossCheck(load.id)
+        toast.dismiss('crosscheck')
+        const mismatches = r.data?.mismatches?.filter((m: any) => m.severity === 'critical') || []
+        if (mismatches.length > 0) {
+          const fields = mismatches.map((m: any) => `• ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`).join('\n')
+          toast.error(`⛔ RC/BOL mismatch — fix before delivering:\n${fields}`, { duration: 8000 })
+          return
+        }
+      } catch {
+        toast.dismiss('crosscheck')
+        // If cross-check fails, warn but don't block
+        toast('⚠️ Could not validate RC vs BOL — proceeding anyway', { icon: '⚠️' })
+      }
+    }
+
     setMoving(load.id)
     try {
       await loadsApi.updateStatus(load.id, nextStatus)
@@ -157,13 +187,8 @@ export default function DispatchPage() {
     setExtr(true); setLog(['Uploading to Gemini AI...'])
     try {
       const res = await loadsApi.extract(file)
-      const { form_data, extracted, status_log } = res.data
+      const { form_data, status_log } = res.data
       setLog(status_log || ['Done'])
-
-      // DEBUG: Open F12 → Console to see what AI returned
-      console.log('RAW extracted (snake_case):', extracted)
-      console.log('MAPPED form_data (PascalCase):', form_data)
-
       const rawStops: Stop[] = (form_data.Stops || []).map((s: any, i: number) => ({
         stop_number: s.stop_number || i + 1,
         action: s.action === 'Delivery' ? 'Delivery' : 'Pickup',
@@ -188,31 +213,22 @@ export default function DispatchPage() {
           date: form_data.Delivery_Date || '', time: '', notes: '',
         },
       ]
-      const fd = form_data  || {}
-      const ex = extracted  || {}
-      const pick = (fk: string, ek: string) => fd[fk] ?? ex[ek] ?? ''
-
       setForm((prev: any) => ({
         ...prev,
-        broker_load_id: pick('Broker_Load_ID','broker_load_id') || prev.broker_load_id,
-        broker_name:    pick('Broker_Name',   'broker_name')    || prev.broker_name,
-        shipper_name:   pick('Shipper_Name',  'shipper_name')   || prev.shipper_name,
-        carrier_name:   pick('Carrier_Name',  'carrier_name')   || prev.carrier_name,
-        driver_name:    pick('Driver_Name',   'driver_name')    || prev.driver_name,
-        truck_number:   pick('Truck_Number',  'truck_number')   || prev.truck_number,
-        trailer_number: pick('Trailer_Number','trailer_number') || prev.trailer_number,
-        commodity:      pick('Commodity',     'commodity')      || prev.commodity,
-        weight_lbs:     pick('Weight_LBS',    'weight_lbs')     || prev.weight_lbs,
-        loaded_miles:   pick('Miles',         'miles')          || prev.loaded_miles,
-        freight_rate:   pick('Rate_USD',      'rate_usd')       || prev.freight_rate,
+        broker_load_id: form_data.Broker_Load_ID || prev.broker_load_id,
+        broker_name:    form_data.Broker_Name    || prev.broker_name,
+        shipper_name:   form_data.Shipper_Name   || prev.shipper_name,
+        carrier_name:   form_data.Carrier_Name   || prev.carrier_name,
+        driver_name:    form_data.Driver_Name    || prev.driver_name,
+        truck_number:   form_data.Truck_Number   || prev.truck_number,
+        trailer_number: form_data.Trailer_Number || prev.trailer_number,
+        commodity:      form_data.Commodity      || prev.commodity,
+        weight_lbs:     form_data.Weight_LBS     || prev.weight_lbs,
+        loaded_miles:   form_data.Miles          || prev.loaded_miles,
+        freight_rate:   form_data.Rate_USD       || prev.freight_rate,
         source_file: file.name, stops,
       }))
-
-      const filledFields = Object.keys(fd).length
-      toast.success(filledFields > 0
-        ? `✅ ${filledFields} fields extracted, ${stops.length} stop(s)`
-        : '⚠️ AI returned no data — check browser console (F12)'
-      )
+      toast.success(`${stops.length} stop(s) extracted`)
     } catch {
       toast.error('Extraction failed — fill manually')
       setLog(['Failed'])
@@ -449,9 +465,27 @@ export default function DispatchPage() {
                         <td className="px-4 py-3 text-sm font-bold whitespace-nowrap" style={{ color: currentStage.color }}>
                           ${l.freight_rate?.toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-center text-sm">{ds?.rc ? '✅' : '❌'}</td>
-                        <td className="px-4 py-3 text-center text-sm">{ds?.bol ? '✅' : '❌'}</td>
-                        <td className="px-4 py-3 text-center text-sm">{ds?.pod ? '✅' : '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <button onClick={() => openDocs(l)}
+                            className="text-xs px-2 py-1 rounded-lg font-semibold whitespace-nowrap"
+                            style={{ background: ds?.rc ? '#F0FDF4' : '#FEF2F2', color: ds?.rc ? '#16A34A' : '#DC2626', border: `1px solid ${ds?.rc ? '#BBF7D0' : '#FECACA'}` }}>
+                            {ds?.rc ? '📋 View' : '⬆ Upload'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button onClick={() => openDocs(l)}
+                            className="text-xs px-2 py-1 rounded-lg font-semibold whitespace-nowrap"
+                            style={{ background: ds?.bol ? '#F0FDF4' : '#FEF2F2', color: ds?.bol ? '#16A34A' : '#DC2626', border: `1px solid ${ds?.bol ? '#BBF7D0' : '#FECACA'}` }}>
+                            {ds?.bol ? '📄 View' : '⬆ Upload'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button onClick={() => openDocs(l)}
+                            className="text-xs px-2 py-1 rounded-lg font-semibold whitespace-nowrap"
+                            style={{ background: ds?.pod ? '#F0FDF4' : '#F8FAFC', color: ds?.pod ? '#16A34A' : '#94A3B8', border: `1px solid ${ds?.pod ? '#BBF7D0' : '#E2E8F0'}` }}>
+                            {ds?.pod ? '✅ View' : '⬆ Upload'}
+                          </button>
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {/* Move to next status */}
