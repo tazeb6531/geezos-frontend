@@ -811,12 +811,14 @@ export default function DispatchPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => setSelLoad(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 max-h-screen overflow-y-auto"
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
             <div className="flex items-center justify-between mb-5">
               <div>
-                <div className="font-bold" style={{ color: '#1A1A2E' }}>
-                  Documents — Load #{selLoad.load_number}
+                <div className="font-bold text-lg" style={{ color: '#1A1A2E' }}>
+                  📁 Documents — Load #{selLoad.load_number}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>
                   {selLoad.broker_name} · {selLoad.route}
@@ -826,76 +828,154 @@ export default function DispatchPage() {
                 className="text-xl" style={{ color: '#94A3B8' }}>✕</button>
             </div>
 
-            {/* Upload grid */}
-            <div className="grid grid-cols-3 gap-3 mb-5">
+            {/* Upload buttons — Fix 1: explicit Upload button, not auto */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
               {DOC_TYPES.map(dt => {
                 const icon = dt === 'Rate Confirmation' ? '📋'
                   : dt === 'Bill of Lading' ? '📄'
                   : dt === 'Proof of Delivery' ? '✅'
                   : dt === 'Invoice' ? '💰' : '📎'
                 const isMandatory = dt === 'Rate Confirmation' || dt === 'Bill of Lading'
-                const hasDoc = docs.some(d => d.doc_type === dt)
+                const dtDocs = docs.filter((d: any) => d.doc_type === dt)
+                const hasDoc = dtDocs.length > 0
+                // Fix 4: allow multiple docs per type (except RC — only one RC)
+                const canUploadMore = dt !== 'Rate Confirmation' || !hasDoc
                 return (
-                  <label key={dt}
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all hover:border-amber-400"
+                  <div key={dt} className="rounded-xl border-2 p-3"
                     style={{
                       borderColor: hasDoc ? '#16A34A' : isMandatory ? '#FCA5A5' : '#E2E8F0',
                       borderStyle: hasDoc ? 'solid' : 'dashed',
                       background: hasDoc ? '#F0FDF4' : 'white',
                     }}>
-                    <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg"
-                      onChange={async e => {
-                        if (!e.target.files?.[0]) return
-                        try {
-                          await loadsApi.uploadDoc(selLoad.id, e.target.files[0], dt)
-                          const r = await loadsApi.getDocs(selLoad.id); setDocs(r.data)
-                          const ds = await loadsApi.docStatus(selLoad.id)
-                          setDocStatus(p => ({ ...p, [selLoad.id]: ds.data }))
-                          toast.success(`${dt} uploaded`)
-                        } catch (e: any) {
-                          toast.error(e.response?.data?.detail || 'Upload failed')
-                        }
-                      }} />
-                    <span className="text-xl">{icon}</span>
-                    <span className="text-xs font-semibold text-center"
-                      style={{ color: hasDoc ? '#16A34A' : '#64748B' }}>
-                      {dt}
-                    </span>
-                    {isMandatory && !hasDoc && (
-                      <span className="text-xs font-bold" style={{ color: '#DC2626' }}>Required</span>
-                    )}
-                    {hasDoc && (
-                      <span className="text-xs font-bold" style={{ color: '#16A34A' }}>✓ Uploaded</span>
-                    )}
-                  </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{icon}</span>
+                        <span className="text-xs font-bold" style={{ color: hasDoc ? '#16A34A' : '#64748B' }}>
+                          {dt}
+                        </span>
+                        {isMandatory && !hasDoc && (
+                          <span className="text-xs font-bold" style={{ color: '#DC2626' }}>Required</span>
+                        )}
+                      </div>
+                      {/* Fix 1: explicit Upload button with file picker */}
+                      {canUploadMore && (
+                        <label className="cursor-pointer">
+                          <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg"
+                            onChange={async e => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              const toastId = toast.loading(`Uploading ${dt}...`)
+                              try {
+                                await loadsApi.uploadDoc(selLoad.id, file, dt)
+                                const r = await loadsApi.getDocs(selLoad.id); setDocs(r.data)
+                                const ds = await loadsApi.docStatus(selLoad.id)
+                                setDocStatus(p => ({ ...p, [selLoad.id]: ds.data }))
+                                toast.success(`${dt} uploaded ✅`, { id: toastId })
+                                // Reset input so same file can be selected again
+                                e.target.value = ''
+                              } catch (err: any) {
+                                toast.error(err.response?.data?.detail || 'Upload failed', { id: toastId })
+                              }
+                            }} />
+                          <div className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
+                            style={{ background: '#F1EFE8', color: '#64748B' }}>
+                            ⬆ Upload
+                          </div>
+                        </label>
+                      )}
+                    </div>
+                    {/* Docs list for this type */}
+                    {dtDocs.map((d: any) => (
+                      <div key={d.id} className="flex items-center justify-between mt-1 px-2 py-1 rounded-lg"
+                        style={{ background: 'rgba(22,163,74,0.08)' }}>
+                        <div className="text-xs truncate max-w-[160px]" style={{ color: '#374151' }}>
+                          {d.original_filename}
+                        </div>
+                        <div className="flex gap-1">
+                          {/* View */}
+                          <button onClick={async () => {
+                            try {
+                              const r = await loadsApi.getDocUrl(selLoad.id, d.id)
+                              window.open(r.data.url, '_blank')
+                            } catch { toast.error('Could not open file') }
+                          }} className="text-xs px-2 py-0.5 rounded font-semibold"
+                            style={{ background: '#EFF6FF', color: '#2563EB' }}>
+                            👁 View
+                          </button>
+                          {/* Fix 2: Delete button */}
+                          <button onClick={async () => {
+                            if (!confirm(`Delete ${d.original_filename}?`)) return
+                            try {
+                              await loadsApi.deleteDoc(selLoad.id, d.id)
+                              const r = await loadsApi.getDocs(selLoad.id); setDocs(r.data)
+                              const ds = await loadsApi.docStatus(selLoad.id)
+                              setDocStatus(p => ({ ...p, [selLoad.id]: ds.data }))
+                              toast.success('Deleted')
+                            } catch { toast.error('Delete failed') }
+                          }} className="text-xs px-2 py-0.5 rounded font-semibold"
+                            style={{ background: '#FEE2E2', color: '#DC2626' }}>
+                            🗑
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )
               })}
             </div>
 
-            {/* Uploaded docs list */}
-            {docs.length > 0 && (
-              <div>
-                <div className="text-xs font-bold mb-2" style={{ color: '#94A3B8' }}>UPLOADED FILES</div>
-                <div className="space-y-2">
-                  {docs.map((d: any) => (
-                    <div key={d.id}
-                      className="flex items-center justify-between p-3 rounded-xl"
-                      style={{ background: '#F8F7F4' }}>
-                      <div>
-                        <div className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>{d.doc_type}</div>
-                        <div className="text-xs" style={{ color: '#94A3B8' }}>{d.original_filename}</div>
-                      </div>
-                      <button onClick={async () => {
-                        const r = await loadsApi.getDocUrl(selLoad.id, d.id)
-                        window.open(r.data.url, '_blank')
-                      }} className="text-xs px-3 py-1.5 rounded-lg font-semibold"
-                        style={{ background: '#EFF6FF', color: '#2563EB' }}>
-                        View
-                      </button>
-                    </div>
-                  ))}
+            {/* Fix 3: RC vs BOL validation */}
+            {docs.some((d: any) => d.doc_type === 'Rate Confirmation') &&
+             docs.some((d: any) => d.doc_type === 'Bill of Lading') && (
+              <div className="mb-4">
+                <button onClick={async () => {
+                  const toastId = toast.loading('Validating RC vs BOL with AI...')
+                  try {
+                    const r = await loadsApi.crossCheck(selLoad.id)
+                    toast.dismiss(toastId)
+                    const result = r.data
+                    const critical = result.mismatches?.filter((m: any) => m.severity === 'critical') || []
+                    const warnings = result.mismatches?.filter((m: any) => m.severity === 'warning') || []
+                    if (critical.length === 0 && warnings.length === 0) {
+                      toast.success('✅ RC and BOL match — no issues found!', { duration: 5000 })
+                    } else {
+                      if (critical.length > 0) {
+                        critical.forEach((m: any) => {
+                          toast.error(`⛔ ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`, { duration: 8000 })
+                        })
+                      }
+                      if (warnings.length > 0) {
+                        warnings.forEach((m: any) => {
+                          toast(`⚠️ ${m.field}: RC="${m.rc_value}" vs BOL="${m.bol_value}"`, { duration: 6000 })
+                        })
+                      }
+                    }
+                  } catch (err: any) {
+                    toast.error(err.response?.data?.detail || 'Validation failed', { id: toastId })
+                  }
+                }} className="w-full py-2.5 rounded-xl text-sm font-semibold"
+                  style={{ background: '#1A1A2E', color: 'white' }}>
+                  🤖 Validate RC vs BOL with AI
+                </button>
+                <div className="text-xs mt-1 text-center" style={{ color: '#94A3B8' }}>
+                  AI compares load #, origin, destination, rate, dates between RC and BOL
                 </div>
               </div>
+            )}
+
+            {/* Download all */}
+            {docs.length > 0 && (
+              <button onClick={async () => {
+                try {
+                  const r = await loadsApi.downloadZip(selLoad.id)
+                  const url = URL.createObjectURL(new Blob([r.data]))
+                  const a = document.createElement('a'); a.href = url
+                  a.download = `Load_${selLoad.load_number}_docs.zip`; a.click()
+                } catch { toast.error('Download failed') }
+              }} className="w-full py-2 rounded-xl text-sm font-semibold mt-1"
+                style={{ background: '#F1EFE8', color: '#64748B' }}>
+                ⬇ Download All as ZIP
+              </button>
             )}
           </div>
         </div>
