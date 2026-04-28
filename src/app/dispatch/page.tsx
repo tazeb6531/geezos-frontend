@@ -861,21 +861,26 @@ export default function DispatchPage() {
                       {canUploadMore && (
                         <label className="cursor-pointer">
                           <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg"
+                            multiple={dt !== 'Rate Confirmation'}
                             onChange={async e => {
-                              const file = e.target.files?.[0]
-                              if (!file) return
-                              const toastId = toast.loading(`Uploading ${dt}...`)
-                              try {
-                                await loadsApi.uploadDoc(selLoad.id, file, dt)
-                                const r = await loadsApi.getDocs(selLoad.id); setDocs(r.data)
-                                const ds = await loadsApi.docStatus(selLoad.id)
-                                setDocStatus(p => ({ ...p, [selLoad.id]: ds.data }))
-                                toast.success(`${dt} uploaded ✅`, { id: toastId })
-                                // Reset input so same file can be selected again
-                                e.target.value = ''
-                              } catch (err: any) {
-                                toast.error(err.response?.data?.detail || 'Upload failed', { id: toastId })
+                              const files = Array.from(e.target.files || [])
+                              if (!files.length) return
+                              const toastId = toast.loading(`Uploading ${files.length} file(s)...`)
+                              let success = 0
+                              for (const file of files) {
+                                try {
+                                  await loadsApi.uploadDoc(selLoad.id, file, dt)
+                                  success++
+                                } catch (err: any) {
+                                  toast.error(`${file.name}: ${err.response?.data?.detail || 'Upload failed'}`)
+                                }
                               }
+                              const r = await loadsApi.getDocs(selLoad.id); setDocs(r.data)
+                              const ds = await loadsApi.docStatus(selLoad.id)
+                              setDocStatus(p => ({ ...p, [selLoad.id]: ds.data }))
+                              if (success > 0) toast.success(`${success} file(s) uploaded ✅`, { id: toastId })
+                              else toast.dismiss(toastId)
+                              e.target.value = ''
                             }} />
                           <div className="text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer"
                             style={{ background: '#F1EFE8', color: '#64748B' }}>
