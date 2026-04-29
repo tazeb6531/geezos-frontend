@@ -156,6 +156,11 @@ export default function FleetPage() {
                   <div className="text-xs font-semibold" style={{ color: doc ? '#16A34A' : '#64748B' }}>{dt}</div>
                   {doc && <span className="text-xs px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#DCFCE7', color: '#16A34A' }}>✓</span>}
                 </div>
+                {doc && (
+                  <div className="text-xs truncate px-1" style={{ color: '#64748B' }} title={doc.original_filename}>
+                    📄 {doc.original_filename}
+                  </div>
+                )}
                 {doc ? (
                   <div className="flex gap-2">
                     <button onClick={() => onView(doc)}
@@ -163,7 +168,7 @@ export default function FleetPage() {
                       style={{ background: '#EFF6FF', color: '#2563EB' }}>👁 View</button>
                     <button onClick={() => onDelete(doc)}
                       className="text-xs px-2 py-1 rounded-lg"
-                      style={{ background: '#FEE2E2', color: '#DC2626' }}>🗑</button>
+                      style={{ background: '#FEE2E2', color: '#DC2626' }}>🗑 Delete</button>
                   </div>
                 ) : (
                   <label className={isUploading ? 'cursor-wait' : 'cursor-pointer'}>
